@@ -12,6 +12,12 @@ TOKEN = os.getenv("TOKEN")
 with open("countries.json", "r", encoding="utf-8") as f:
   country_names: list[str] = json.load(f)
 
-bot = Flaguess(country_names, 3.1, token=TOKEN, intents=Intents.DEFAULT | Intents.MESSAGE_CONTENT)
+bot = Flaguess(
+  intents=Intents.DEFAULT | Intents.MESSAGE_CONTENT,
+  send_not_ready_messages=True,
+  country_names=country_names,
+  rest_countries_version=3.1,
+  token=TOKEN,
+)
 
 bot.start()
