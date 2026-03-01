@@ -83,6 +83,7 @@ class Flaguess(Client):
         query_interval_min INTEGER NOT NULL DEFAULT 1,
         query_interval_max INTEGER NOT NULL DEFAULT 1440,
         chosen_country TEXT,
+        active INTEGER NOT NULL DEFAULT 1,
         CONSTRAINT valid_intervals CHECK (query_interval_min <= query_interval_max)
       )
     """)
@@ -214,3 +215,57 @@ class Flaguess(Client):
     if self.latency == float("inf"):
       return await ctx.send("im still warming up! wait a few seconds.")
     await ctx.send(f"i have a latency of {int(self.latency * 100)}ms")
+
+  @slash_command(name="list_config", description="show all bot configurations")
+  async def list_config(self, ctx: SlashContext):
+    if ctx.guild_id not in self.guild_query_flag_tasks:
+      return await ctx.send("this server has no flag query channel set")
+
+    async with self.db.execute("SELECT channel_id, query_interval_min, query_interval_max, active FROM guilds WHERE guild_id = ?", (ctx.guild_id,)) as cursor:
+      row = await cursor.fetchone()
+      channel_id = row[0]
+      query_interval_min = row[1]
+      query_interval_max = row[2]
+      active = row[3]
+
+    table = f"""
+```prolog
+╔══════════════════╦═════════════════════╗
+║      option      ║        value        ║
+╠══════════════════╬═════════════════════╣
+║   query channel  ║ {channel_id} ║
+╠══════════════════╬═════════════════════╣
+║ minimum interval ║ {query_interval_min}
+╠══════════════════╬═════════════════════╣
+║ maximum interval ║ {query_interval_max}
+╠══════════════════╬═════════════════════╣
+║      active      ║ {active}                   ║
+╚══════════════════╩═════════════════════╝
+```
+"""
+
+    await ctx.send(table)
+
+  @slash_command(name="hint", description="show the country name's length")
+  async def hint(self, ctx: SlashContext):
+    async with self.db.execute("SELECT chosen_country FROM guilds WHERE guild_id = ?", (ctx.guild_id,)) as cursor:
+      chosen_country = (await cursor.fetchone())[0]
+
+    if not chosen_country:
+      return await ctx.send("i haven't even chosen a flag yet...")
+
+    hint = f"`{'_ ' * len(chosen_country)}`"
+    
+    await ctx.send(content=hint, ephemeral=True)
+
+  @slash_command(name="toggle", description="turn the bot on or off")
+  async def toggle(self, ctx: SlashContext):
+    async with self.db.execute("SELECT active FROM guilds WHERE guild_id = ?", (ctx.guild_id,)) as cursor:
+      active = (await cursor.fetchone())[0]
+
+    active_toggled = not active
+
+    await self.db.execute("UPDATE guilds SET active = ? WHERE guild_id = ?", (active_toggled, ctx.guild_id))
+    await self.db.commit()
+
+    await ctx.send(f"i am now{"" if active_toggled else " not"} sending flag quieries")
